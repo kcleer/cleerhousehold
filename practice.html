@@ -82,12 +82,15 @@
 <main id="app" aria-live="polite"><p>Loading…</p></main>
 <script>
 const TABS = ['#F7A1B0', '#6CC4A1', '#7FA8F5', '#F58A4B', '#B48CF2', '#4FC3D9'];
+const EXTRA = 'Extra practice';
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const app = document.getElementById('app');
 const kid = new URLSearchParams(location.search).get('kid') || '';
 
-let all = [];           // this kid's questions
-let subject = null, topic = null;
+let all = [];            // this kid's questions
+let subject = null;      // chosen subject
+let group = null;        // chosen night (or topic, if the subject has no nights)
+let groupSet = [];       // every question in the chosen night/topic
 let deck = [], index = 0, got = 0, retry = [];
 
 function shuffle(arr) {
@@ -95,41 +98,60 @@ function shuffle(arr) {
   for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
   return a;
 }
-function countBy(list, key) {
+function countBy(list, keyFn) {
   const m = {};
-  for (const q of list) m[q[key]] = (m[q[key]] || 0) + 1;
-  return Object.keys(m).sort((a, b) => a.localeCompare(b)).map(name => ({ name, count: m[name] }));
+  for (const q of list) { const k = keyFn(q); m[k] = (m[k] || 0) + 1; }
+  return Object.keys(m).map(name => ({ name, count: m[name] }));
 }
-function choiceButtons(items, handler) {
+function byName(a, b) {
+  if (a.name === EXTRA) return 1;
+  if (b.name === EXTRA) return -1;
+  return a.name.localeCompare(b.name, undefined, { numeric: true });
+}
+function choiceButtons(items, subFn) {
   return items.map((it, i) => `
     <button class="choice" style="--tab:${TABS[i % TABS.length]}" data-name="${esc(it.name)}">
-      ${esc(it.name)}<small>${it.count} question${it.count === 1 ? '' : 's'}</small>
+      ${esc(it.name)}<small>${subFn ? esc(subFn(it)) : `${it.count} question${it.count === 1 ? '' : 's'}`}</small>
     </button>`).join('');
 }
 function wireChoices(handler) {
   app.querySelectorAll('.choice').forEach(b => b.addEventListener('click', () => handler(b.dataset.name)));
 }
+const subjectList = () => all.filter(q => q.subject === subject);
+const usesNights = () => subjectList().some(q => q.night);
+const nightOf = q => q.night || EXTRA;
 
 function showSubjects() {
-  subject = topic = null;
+  subject = group = null;
   app.innerHTML = `
     <button class="back" id="back">All kids</button>
     <h1>Hi, ${esc(kid)}!</h1>
     <p class="sub">What do you want to practice?</p>
-    <div class="choices">${choiceButtons(countBy(all, 'subject'))}</div>`;
+    <div class="choices">${choiceButtons(countBy(all, q => q.subject).sort(byName))}</div>`;
   document.getElementById('back').onclick = () => location.href = '/';
-  wireChoices(name => { subject = name; showTopics(); });
+  wireChoices(name => { subject = name; showGroups(); });
 }
 
-function showTopics() {
-  const list = all.filter(q => q.subject === subject);
+function showGroups() {
+  const list = subjectList();
+  const nights = usesNights();
+  const keyFn = nights ? nightOf : q => q.topic;
+  const items = countBy(list, keyFn).sort(byName);
+  const topicsIn = name => {
+    const t = [...new Set(list.filter(q => keyFn(q) === name).map(q => q.topic))];
+    return `${t.join(', ')} · ${list.filter(q => keyFn(q) === name).length} cards`;
+  };
   app.innerHTML = `
     <button class="back" id="back">Subjects</button>
     <h1>${esc(subject)}</h1>
-    <p class="sub">Pick a topic.</p>
-    <div class="choices">${choiceButtons(countBy(list, 'topic'))}</div>`;
+    <p class="sub">${nights ? 'Pick tonight’s set.' : 'Pick a topic.'}</p>
+    <div class="choices">${choiceButtons(items, nights ? it => topicsIn(it.name) : null)}</div>`;
   document.getElementById('back').onclick = showSubjects;
-  wireChoices(name => { topic = name; startDeck(list.filter(q => q.topic === name)); });
+  wireChoices(name => {
+    group = name;
+    groupSet = list.filter(q => keyFn(q) === name);
+    startDeck(groupSet);
+  });
 }
 
 function startDeck(questions) {
@@ -141,13 +163,13 @@ function showCard() {
   if (index >= deck.length) return showDone();
   const q = deck[index];
   app.innerHTML = `
-    <button class="back" id="back">${esc(subject)} topics</button>
-    <h1>${esc(topic)}</h1>
+    <button class="back" id="back">${esc(subject)}</button>
+    <h1>${esc(group)}</h1>
     <p class="progress">Card ${index + 1} of ${deck.length}</p>
     <div class="card-wrap">
       <div class="card" id="card">
         <div class="face">
-          <p class="face-label">Question</p>
+          <p class="face-label">${esc(q.topic)}</p>
           <p class="face-text">${esc(q.question)}</p>
         </div>
         <div class="face back-face">
@@ -159,7 +181,7 @@ function showCard() {
     <div class="actions" id="actions">
       <button class="btn" id="flip">Show answer</button>
     </div>`;
-  document.getElementById('back').onclick = showTopics;
+  document.getElementById('back').onclick = showGroups;
   const flip = document.getElementById('flip');
   flip.focus();
   flip.onclick = () => {
@@ -175,22 +197,21 @@ function showCard() {
 
 function showDone() {
   const total = deck.length;
-  const perfect = got === total;
   app.innerHTML = `
-    <button class="back" id="back">${esc(subject)} topics</button>
-    <h1>${esc(topic)}</h1>
+    <button class="back" id="back">${esc(subject)}</button>
+    <h1>${esc(group)}</h1>
     <div class="done">
-      <h2>${perfect ? 'You got them all!' : 'Round finished'}</h2>
+      <h2>${got === total ? 'You got them all!' : 'Round finished'}</h2>
       <p>You got ${got} of ${total} on the first try.</p>
       <div class="actions">
         ${retry.length ? `<button class="btn" id="retry">Practice the ${retry.length} I missed</button>` : ''}
-        <button class="btn notyet" id="again">Start this topic over</button>
+        <button class="btn notyet" id="again">Start this set over</button>
       </div>
     </div>`;
-  document.getElementById('back').onclick = showTopics;
+  document.getElementById('back').onclick = showGroups;
   const r = document.getElementById('retry');
   if (r) r.onclick = () => startDeck(retry);
-  document.getElementById('again').onclick = () => startDeck(all.filter(q => q.subject === subject && q.topic === topic));
+  document.getElementById('again').onclick = () => startDeck(groupSet);
 }
 
 async function load() {
