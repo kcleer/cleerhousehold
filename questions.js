@@ -68,7 +68,8 @@ export default async function handler(req, res) {
           answer: getProp(props, 'answer'),
           kid: getProp(props, 'kid'),
           subject: getProp(props, 'subject') || 'General',
-          topic: getProp(props, 'topic') || 'General'
+          topic: getProp(props, 'topic') || 'General',
+          night: getProp(props, 'night')
         };
         if (q.question && q.kid) questions.push(q);
       }
