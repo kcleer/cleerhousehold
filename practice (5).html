@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Practice</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✏️</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --pencil: #FFC93C;
+    --paper: #FFFDF7;
+    --ink: #1F3A93;
+    --rule: #A9C7EE;
+    --margin: #E0474C;
+    --eraser: #F7A1B0;
+    --green: #2E9E6B;
+    --display: 'Fredoka', 'Arial Rounded MT Bold', system-ui, sans-serif;
+    --body: 'Atkinson Hyperlegible', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: var(--pencil); color: var(--ink);
+    font-family: var(--body); font-size: 1.125rem; line-height: 1.5;
+  }
+  main { max-width: 44rem; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; }
+  .back {
+    font: 600 1rem var(--display); color: var(--ink); background: none; border: 0;
+    padding: .5rem 0; cursor: pointer; text-decoration: underline; text-underline-offset: 3px;
+  }
+  .back:focus-visible, .choice:focus-visible, .btn:focus-visible { outline: 4px solid var(--ink); outline-offset: 3px; }
+  h1 { font: 700 clamp(2.25rem, 7vw, 3.5rem)/1.05 var(--display); margin: .75rem 0 .25rem; }
+  .sub { margin: 0 0 2rem; font-size: 1.2rem; }
+  .choices { display: grid; grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr)); gap: 1rem; }
+  .choice {
+    font: 600 1.35rem var(--display); color: var(--ink); text-align: left;
+    background: var(--paper); border: 0; border-left: 10px solid var(--tab, var(--eraser));
+    border-radius: 4px; padding: 1.1rem 1.25rem; cursor: pointer;
+    box-shadow: 0 3px 0 rgba(31,58,147,.25);
+  }
+  .choice small { display: block; font: 400 1rem var(--body); margin-top: .15rem; }
+  .choice:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(31,58,147,.25); }
+
+  /* The index card */
+  .progress { font: 600 1rem var(--display); margin: 0 0 .75rem; }
+  .card-wrap { perspective: 1400px; }
+  .card { position: relative; min-height: 18rem; transition: transform .45s ease; transform-style: preserve-3d; }
+  .card.flipped { transform: rotateY(180deg); }
+  .face {
+    position: absolute; inset: 0; backface-visibility: hidden;
+    background-color: var(--paper); border-radius: 4px;
+    padding: 2.5rem 1.5rem 1.5rem 3.25rem;
+    background-image:
+      linear-gradient(90deg, transparent 2.25rem, var(--margin) 2.25rem, var(--margin) calc(2.25rem + 2px), transparent calc(2.25rem + 2px)),
+      repeating-linear-gradient(transparent 0 2.25rem, var(--rule) 2.25rem calc(2.25rem + 1px));
+    background-position: 0 0, 0 .9rem;
+    box-shadow: 0 4px 0 rgba(31,58,147,.25);
+    display: flex; flex-direction: column;
+  }
+  .face.back-face { transform: rotateY(180deg); }
+  .face-label { font: 600 .95rem var(--display); color: var(--margin); margin: 0 0 .5rem; }
+  .face-text { font: 600 clamp(1.5rem, 5vw, 2.1rem)/1.3 var(--display); margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .actions { display: flex; gap: .75rem; flex-wrap: wrap; margin-top: 1.5rem; }
+  .btn {
+    font: 600 1.25rem var(--display); border: 0; border-radius: 999px;
+    padding: .85rem 1.6rem; cursor: pointer; color: var(--paper); background: var(--ink);
+    box-shadow: 0 3px 0 rgba(0,0,0,.25);
+  }
+  .btn:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0,0,0,.25); }
+  .btn.got { background: var(--green); }
+  .btn.notyet { background: var(--paper); color: var(--ink); }
+  .done { background: var(--paper); border-radius: 4px; padding: 2rem 1.75rem; box-shadow: 0 4px 0 rgba(31,58,147,.25); }
+  .done h2 { font: 700 2.25rem/1.1 var(--display); margin: 0 0 .5rem; }
+  .status { background: var(--paper); padding: 1.25rem 1.5rem; border-radius: 4px; }
+  .status strong { display: block; font-family: var(--display); font-size: 1.35rem; }
+  @media (prefers-reduced-motion: reduce) { .card { transition: none; } }
+</style>
+</head>
+<body>
+<main id="app" aria-live="polite"><p>Loading…</p></main>
+<script>
+const TABS = ['#F7A1B0', '#6CC4A1', '#7FA8F5', '#F58A4B', '#B48CF2', '#4FC3D9'];
+const EXTRA = 'Extra practice';
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const app = document.getElementById('app');
+const kid = new URLSearchParams(location.search).get('kid') || '';
+
+let all = [];            // this kid's questions
+let subject = null;      // chosen subject
+let group = null;        // chosen night (or topic, if the subject has no nights)
+let groupSet = [];       // every question in the chosen night/topic
+let deck = [], index = 0, got = 0, retry = [];
+
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+function countBy(list, keyFn) {
+  const m = {};
+  for (const q of list) { const k = keyFn(q); m[k] = (m[k] || 0) + 1; }
+  return Object.keys(m).map(name => ({ name, count: m[name] }));
+}
+function byName(a, b) {
+  if (a.name === EXTRA) return 1;
+  if (b.name === EXTRA) return -1;
+  const da = DAY_ORDER.indexOf(a.name), db = DAY_ORDER.indexOf(b.name);
+  if (da > -1 && db > -1) return da - db;
+  return a.name.localeCompare(b.name, undefined, { numeric: true });
+}
+function choiceButtons(items, subFn) {
+  return items.map((it, i) => `
+    <button class="choice" style="--tab:${TABS[i % TABS.length]}" data-name="${esc(it.name)}">
+      ${esc(it.name)}<small>${subFn ? esc(subFn(it)) : `${it.count} question${it.count === 1 ? '' : 's'}`}</small>
+    </button>`).join('');
+}
+function wireChoices(handler) {
+  app.querySelectorAll('.choice').forEach(b => b.addEventListener('click', () => handler(b.dataset.name)));
+}
+const subjectList = () => all.filter(q => q.subject === subject);
+const usesNights = () => subjectList().some(q => q.night);
+// Notion stores Night 1-4; show them as school nights. Day names typed in Notion also work.
+const DAYS = { 'Night 1': 'Monday', 'Night 2': 'Tuesday', 'Night 3': 'Wednesday', 'Night 4': 'Thursday' };
+const DAY_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const TODAY = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()];
+const nightOf = q => q.night ? (DAYS[q.night] || q.night) : EXTRA;
+
+function showSubjects() {
+  subject = group = null;
+  app.innerHTML = `
+    <button class="back" id="back">All kids</button>
+    <h1>Hi, ${esc(kid)}!</h1>
+    <p class="sub">What do you want to practice?</p>
+    <div class="choices">${choiceButtons(countBy(all, q => q.subject).sort(byName))}</div>`;
+  document.getElementById('back').onclick = () => location.href = '/';
+  wireChoices(name => { subject = name; showGroups(); });
+}
+
+function showGroups() {
+  const list = subjectList();
+  const nights = usesNights();
+  const keyFn = nights ? nightOf : q => q.topic;
+  const items = countBy(list, keyFn).sort(byName);
+  const topicsIn = name => {
+    const t = [...new Set(list.filter(q => keyFn(q) === name).map(q => q.topic))];
+    return `${name === TODAY ? 'Tonight · ' : ''}${t.join(', ')} · ${list.filter(q => keyFn(q) === name).length} cards`;
+  };
+  app.innerHTML = `
+    <button class="back" id="back">Subjects</button>
+    <h1>${esc(subject)}</h1>
+    <p class="sub">${nights ? 'Pick tonight’s set.' : 'Pick a topic.'}</p>
+    <div class="choices">${choiceButtons(items, nights ? it => topicsIn(it.name) : null)}</div>`;
+  document.getElementById('back').onclick = showSubjects;
+  wireChoices(name => {
+    group = name;
+    groupSet = list.filter(q => keyFn(q) === name);
+    startDeck(groupSet);
+  });
+}
+
+function startDeck(questions) {
+  deck = shuffle(questions); index = 0; got = 0; retry = [];
+  showCard();
+}
+
+function showCard() {
+  if (index >= deck.length) return showDone();
+  const q = deck[index];
+  app.innerHTML = `
+    <button class="back" id="back">${esc(subject)}</button>
+    <h1>${esc(group)}</h1>
+    <p class="progress">Card ${index + 1} of ${deck.length}</p>
+    <div class="card-wrap">
+      <div class="card" id="card">
+        <div class="face">
+          <p class="face-label">${esc(q.topic)}</p>
+          <p class="face-text">${esc(q.question)}</p>
+        </div>
+        <div class="face back-face">
+          <p class="face-label">Answer</p>
+          <p class="face-text">${esc(q.answer || '(No answer saved yet)')}</p>
+        </div>
+      </div>
+    </div>
+    <div class="actions" id="actions">
+      <button class="btn" id="flip">Show answer</button>
+    </div>`;
+  document.getElementById('back').onclick = showGroups;
+  const flip = document.getElementById('flip');
+  flip.focus();
+  flip.onclick = () => {
+    document.getElementById('card').classList.add('flipped');
+    document.getElementById('actions').innerHTML = `
+      <button class="btn got" id="got">I got it</button>
+      <button class="btn notyet" id="notyet">Not yet</button>`;
+    document.getElementById('got').onclick = () => { got++; index++; showCard(); };
+    document.getElementById('notyet').onclick = () => { retry.push(q); index++; showCard(); };
+    document.getElementById('got').focus();
+  };
+}
+
+function showDone() {
+  const total = deck.length;
+  app.innerHTML = `
+    <button class="back" id="back">${esc(subject)}</button>
+    <h1>${esc(group)}</h1>
+    <div class="done">
+      <h2>${got === total ? 'You got them all!' : 'Round finished'}</h2>
+      <p>You got ${got} of ${total} on the first try.</p>
+      <div class="actions">
+        ${retry.length ? `<button class="btn" id="retry">Practice the ${retry.length} I missed</button>` : ''}
+        <button class="btn notyet" id="again">Start this set over</button>
+      </div>
+    </div>`;
+  document.getElementById('back').onclick = showGroups;
+  const r = document.getElementById('retry');
+  if (r) r.onclick = () => startDeck(retry);
+  document.getElementById('again').onclick = () => startDeck(groupSet);
+}
+
+async function load() {
+  if (!kid) { location.href = '/'; return; }
+  document.title = `${kid} · Practice`;
+  try {
+    const r = await fetch('/api/questions');
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'The question list did not load.');
+    all = data.questions.filter(q => q.kid === kid);
+    if (!all.length) {
+      app.innerHTML = `<button class="back" onclick="location.href='/'">All kids</button>
+        <div class="status"><strong>No questions for ${esc(kid)} yet</strong>
+        Add rows in Notion with Kid set to "${esc(kid)}", then refresh.</div>`;
+      return;
+    }
+    showSubjects();
+  } catch (e) {
+    app.innerHTML = `<div class="status"><strong>Questions didn't load</strong>${esc(e.message)}</div>`;
+  }
+}
+load();
+</script>
+</body>
+</html>
