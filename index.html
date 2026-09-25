@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Study Time</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✏️</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --pencil: #FFC93C;
+    --paper: #FFFDF7;
+    --ink: #1F3A93;
+    --rule: #A9C7EE;
+    --margin: #E0474C;
+    --eraser: #F7A1B0;
+    --display: 'Fredoka', 'Arial Rounded MT Bold', system-ui, sans-serif;
+    --body: 'Atkinson Hyperlegible', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh;
+    background: var(--pencil);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 1.125rem;
+    line-height: 1.5;
+  }
+  main { max-width: 56rem; margin: 0 auto; padding: 3rem 1.25rem 4rem; }
+  h1 {
+    font-family: var(--display); font-weight: 700;
+    font-size: clamp(2.75rem, 9vw, 5rem); line-height: 1;
+    margin: 0 0 .5rem; letter-spacing: -.01em;
+  }
+  .lede { margin: 0 0 2.5rem; font-size: 1.25rem; max-width: 34ch; }
+  .kids { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 1.5rem; }
+  .kid {
+    position: relative; display: block; text-decoration: none; color: var(--ink);
+    background: var(--paper);
+    border-radius: 4px;
+    padding: 2.25rem 1.5rem 1.5rem 2.75rem;
+    min-height: 11rem;
+    background-image:
+      linear-gradient(90deg, transparent 1.9rem, var(--margin) 1.9rem, var(--margin) calc(1.9rem + 2px), transparent calc(1.9rem + 2px)),
+      repeating-linear-gradient(transparent 0 1.9rem, var(--rule) 1.9rem calc(1.9rem + 1px));
+    background-position: 0 0, 0 .6rem;
+    box-shadow: 0 3px 0 rgba(31,58,147,.25);
+    transition: transform .15s ease;
+  }
+  .kid::before { /* colored tab on top of the card */
+    content: ''; position: absolute; top: -.75rem; left: 1.25rem;
+    width: 5rem; height: 1.1rem; border-radius: 6px 6px 0 0;
+    background: var(--tab, var(--eraser));
+  }
+  .kid:hover { transform: rotate(-1deg) translateY(-2px); }
+  .kid:focus-visible { outline: 4px solid var(--ink); outline-offset: 4px; }
+  .kid-name { font-family: var(--display); font-weight: 600; font-size: 2rem; line-height: 1.1; margin: 0; }
+  .kid-meta { margin: .5rem 0 0; }
+  .status { background: var(--paper); padding: 1.25rem 1.5rem; border-radius: 4px; max-width: 40rem; }
+  .status strong { display: block; font-family: var(--display); font-size: 1.35rem; margin-bottom: .25rem; }
+  @media (prefers-reduced-motion: reduce) { .kid { transition: none; } .kid:hover { transform: none; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Study time</h1>
+  <p class="lede">Pick your card to start practicing.</p>
+  <div id="kids" class="kids" aria-live="polite"><p>Loading…</p></div>
+</main>
+<script>
+const TABS = ['#F7A1B0', '#6CC4A1', '#7FA8F5', '#F58A4B', '#B48CF2', '#4FC3D9'];
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+async function load() {
+  const box = document.getElementById('kids');
+  try {
+    const r = await fetch('/api/questions');
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'The question list did not load.');
+
+    const counts = {};
+    for (const q of data.questions) counts[q.kid] = (counts[q.kid] || 0) + 1;
+    const kids = Object.keys(counts).sort((a, b) => a.localeCompare(b));
+
+    if (!kids.length) {
+      box.innerHTML = `<div class="status"><strong>No questions yet</strong>
+        Add a row to the Notion questions database with a Question and a Kid, then refresh this page.</div>`;
+      return;
+    }
+    box.innerHTML = kids.map((k, i) => `
+      <a class="kid" style="--tab:${TABS[i % TABS.length]}" href="/practice?kid=${encodeURIComponent(k)}">
+        <p class="kid-name">${esc(k)}</p>
+        <p class="kid-meta">${counts[k]} question${counts[k] === 1 ? '' : 's'}</p>
+      </a>`).join('');
+  } catch (e) {
+    box.innerHTML = `<div class="status"><strong>Questions didn't load</strong>${esc(e.message)}</div>`;
+  }
+}
+load();
+</script>
+</body>
+</html>
