@@ -106,6 +106,8 @@ function countBy(list, keyFn) {
 function byName(a, b) {
   if (a.name === EXTRA) return 1;
   if (b.name === EXTRA) return -1;
+  const da = DAY_ORDER.indexOf(a.name), db = DAY_ORDER.indexOf(b.name);
+  if (da > -1 && db > -1) return da - db;
   return a.name.localeCompare(b.name, undefined, { numeric: true });
 }
 function choiceButtons(items, subFn) {
@@ -119,7 +121,11 @@ function wireChoices(handler) {
 }
 const subjectList = () => all.filter(q => q.subject === subject);
 const usesNights = () => subjectList().some(q => q.night);
-const nightOf = q => q.night || EXTRA;
+// Notion stores Night 1-4; show them as school nights. Day names typed in Notion also work.
+const DAYS = { 'Night 1': 'Monday', 'Night 2': 'Tuesday', 'Night 3': 'Wednesday', 'Night 4': 'Thursday' };
+const DAY_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const TODAY = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()];
+const nightOf = q => q.night ? (DAYS[q.night] || q.night) : EXTRA;
 
 function showSubjects() {
   subject = group = null;
@@ -139,7 +145,7 @@ function showGroups() {
   const items = countBy(list, keyFn).sort(byName);
   const topicsIn = name => {
     const t = [...new Set(list.filter(q => keyFn(q) === name).map(q => q.topic))];
-    return `${t.join(', ')} · ${list.filter(q => keyFn(q) === name).length} cards`;
+    return `${name === TODAY ? 'Tonight · ' : ''}${t.join(', ')} · ${list.filter(q => keyFn(q) === name).length} cards`;
   };
   app.innerHTML = `
     <button class="back" id="back">Subjects</button>
